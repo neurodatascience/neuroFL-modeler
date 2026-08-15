@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from torch.utils.data import DataLoader, TensorDataset
 
 # ---- Model ----
@@ -62,11 +63,11 @@ def get_initial_arrays(input_dim, dropout):
 
 def train_local(arrays, config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    data_dir = config["data_dir"]
-    batch_size = config.get("batch_size", 32)
-    epochs = config.get("epochs", 1)
-    learning_rate = config.get("lr", 1e-3)
-    dropout = config.get("dropout", 0.0)
+    data_dir = Path(config["data-path"])
+    batch_size = int(config.get("batch-size", 32))
+    epochs = int(config.get("local-epochs", 50))
+    learning_rate = float(config.get("learning-rate", 0.0005))
+    dropout = float(config.get("dropout", 0.0))
     train_loader, _, input_dim, num_classes = make_loaders(data_dir, batch_size)
     model = SimpleNet(input_dim, num_classes, dropout).to(device)
     with torch.no_grad():
@@ -75,6 +76,7 @@ def train_local(arrays, config):
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     model.train()
+    num_examples = 0
     for _ in range(epochs):
         for X, y in train_loader:
             X, y = X.to(device), y.to(device)
@@ -83,14 +85,16 @@ def train_local(arrays, config):
             loss = criterion(out, y)
             loss.backward()
             optimizer.step()
+            num_examples += X.size(0)
     new_arrays = [p.detach().cpu().numpy() for p in model.parameters()]
-    return new_arrays
+    metrics = {"train_loss": float(loss.item())}
+    return new_arrays, num_examples, metrics
 
 def eval_local(arrays, config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    data_dir = config["data_dir"]
-    batch_size = config.get("batch_size", 32)
-    dropout = config.get("dropout", 0.0)
+    data_dir = Path(config["data-path"])
+    batch_size = int(config.get("batch-size", 32))
+    dropout = float(config.get("dropout", 0.0))
     _, val_loader, input_dim, num_classes = make_loaders(data_dir, batch_size)
     model = SimpleNet(input_dim, num_classes, dropout).to(device)
     with torch.no_grad():
@@ -108,7 +112,9 @@ def eval_local(arrays, config):
             preds = out.argmax(dim=1)
             correct += (preds == y).sum().item()
             total += y.size(0)
-    return {
-        "val_loss": val_loss / total if total > 0 else 0.0,
-        "val_accuracy": correct / total if total > 0 else 0.0
+    avg_loss = val_loss / total if total > 0 else 0.0
+    metrics = {
+        "val_loss": avg_loss,
+        "val_accuracy": correct / total if total > 0 else 0.0,
     }
+    return avg_loss, total, metrics
