@@ -42,19 +42,12 @@ def load_data(data_dir):
 
 def make_loaders(data_dir, batch_size, debug=False):
     X, y = load_data(data_dir)
-
-    # Mean and std of the whole dataset before splitting
-    print("Whole dataset mean:", X[:,:10].mean(axis=0).round(2))
-    print("Whole dataset std:", X[:,:10].std(axis=0).round(2))
-
-
     n = X.shape[0]
     split = int(n * 0.8)
     X_train, X_val = X[:split], X[split:]
     y_train, y_val = y[:split], y[split:]
 
     if debug:
-        # Before and after feature normalization, print the mean and std of the features
         print("Before normalization:")
         print("Train mean:", X_train[:,:10].mean(axis=0).round(2))
         print("Train std:", X_train[:,:10].std(axis=0).round(2))
