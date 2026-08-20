@@ -66,8 +66,8 @@ def train_local(arrays, config):
     data_dir = Path(config["data-path"])
     batch_size = int(config.get("batch-size", 32))
     epochs = int(config.get("local-epochs", 50))
-    learning_rate = float(config.get("learning-rate", 0.0005))
-    dropout = float(config.get("dropout", 0.0))
+    learning_rate = float(config.get("learning-rate", 0.001))
+    dropout = float(config.get("dropout", 0))
     train_loader, _, input_dim, num_classes = make_loaders(data_dir, batch_size)
     model = SimpleNet(input_dim, num_classes, dropout).to(device)
     with torch.no_grad():
@@ -99,7 +99,7 @@ def eval_local(arrays, config):
     model = SimpleNet(input_dim, num_classes, dropout).to(device)
     with torch.no_grad():
         for p, arr in zip(model.parameters(), arrays):
-            p.copy_(torch.tensor(arr))
+            p.copy_(torch.tensor(np.array(arr)))
     model.eval()
     criterion = nn.CrossEntropyLoss()
     correct, total, val_loss = 0, 0, 0.0
