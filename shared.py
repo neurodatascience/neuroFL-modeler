@@ -40,12 +40,41 @@ def load_data(data_dir):
 
     return X, y
 
-def make_loaders(data_dir, batch_size):
+def make_loaders(data_dir, batch_size, debug=False):
     X, y = load_data(data_dir)
+
+    # Mean and std of the whole dataset before splitting
+    print("Whole dataset mean:", X[:,:10].mean(axis=0).round(2))
+    print("Whole dataset std:", X[:,:10].std(axis=0).round(2))
+
+
     n = X.shape[0]
     split = int(n * 0.8)
     X_train, X_val = X[:split], X[split:]
     y_train, y_val = y[:split], y[split:]
+
+    if debug:
+        # Before and after feature normalization, print the mean and std of the features
+        print("Before normalization:")
+        print("Train mean:", X_train[:,:10].mean(axis=0).round(2))
+        print("Train std:", X_train[:,:10].std(axis=0).round(2))
+        print("Validation mean:", X_val[:,:10].mean(axis=0).round(2))
+        print("Validation std:", X_val[:,:10].std(axis=0).round(2))
+
+    # Apply normalization standard scaler to the features
+    mean = X_train.mean(axis=0) # only use training data to compute mean and std
+    std = X_train.std(axis=0)
+    std[std == 0] = 1  # Prevent division by zero
+    X_train = (X_train - mean) / std
+    X_val = (X_val - mean) / std    
+
+    if debug:
+        print("After normalization:")
+        print("Train mean:", X_train[:,:10].mean(axis=0).round(2))
+        print("Train std:", X_train[:,:10].std(axis=0).round(2))
+        print("Validation mean:", X_val[:,:10].mean(axis=0).round(2))
+        print("Validation std:", X_val[:,:10].std(axis=0).round(2))
+
     train_loader = DataLoader(TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train)),
                               batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(TensorDataset(torch.from_numpy(X_val), torch.from_numpy(y_val)),
@@ -61,14 +90,14 @@ def get_initial_arrays(input_dim, dropout):
     arrays = [p.detach().cpu().numpy() for p in model.parameters()]
     return arrays
 
-def train_local(arrays, config):
+def train_local(arrays, config, debug=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     data_dir = Path(config["data-path"])
     batch_size = int(config.get("batch-size", 32))
     epochs = int(config.get("local-epochs", 50))
     learning_rate = float(config.get("learning-rate", 0.001))
     dropout = float(config.get("dropout", 0))
-    train_loader, _, input_dim, num_classes = make_loaders(data_dir, batch_size)
+    train_loader, _, input_dim, num_classes = make_loaders(data_dir, batch_size, debug=debug)
     model = SimpleNet(input_dim, num_classes, dropout).to(device)
     with torch.no_grad():
         for p, arr in zip(model.parameters(), arrays):
@@ -90,12 +119,12 @@ def train_local(arrays, config):
     metrics = {"train_loss": float(loss.item())}
     return new_arrays, num_examples, metrics
 
-def eval_local(arrays, config):
+def eval_local(arrays, config, debug=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     data_dir = Path(config["data-path"])
     batch_size = int(config.get("batch-size", 32))
     dropout = float(config.get("dropout", 0.0))
-    _, val_loader, input_dim, num_classes = make_loaders(data_dir, batch_size)
+    _, val_loader, input_dim, num_classes = make_loaders(data_dir, batch_size, debug=debug)
     model = SimpleNet(input_dim, num_classes, dropout).to(device)
     with torch.no_grad():
         for p, arr in zip(model.parameters(), arrays):
